@@ -5,7 +5,7 @@ import scala.util.Try
 
 object TimeSeries {
 
-  val WindowSize: Int = 60
+  val WindowSize: Int = 360
   private val Pattern = "(\\d+)[\\t ]+([\\d.]+)".r
 
   case class Window(
@@ -90,7 +90,7 @@ object TimeSeries {
   def iterate(iterator: Iterator[String], windowSize: Int = WindowSize): CurrentWindow = {
     var state = CurrentWindow()
 
-    println("T          V          N   RS      MinV    MaxV")
+    println("T           V         N  RS        MinV     MaxV")
     1 to 50 foreach { _ => print("-") }
     println()
     for (line <- iterator) line match {
