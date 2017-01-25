@@ -8,3 +8,6 @@ Formatting is applied to get 5 digits after comma and whitespaces to fit all num
 
 There are two implementations (was just experimenting with ways to implement it in a way it is easy to test
 but without any specific functionality used only for automation).
+
+File size could be any big, but if size of one window items is larger than memory allowed for JVM can 
+handle - the program will fail wit OutOfMemory.
