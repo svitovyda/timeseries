@@ -1,107 +1,89 @@
 package com.svitovyda.timeseries
 
+import scala.annotation.tailrec
 import scala.io.{BufferedSource, Source}
-import scala.util.Try
+import scala.util.{Failure, Try}
 
 object TimeSeries {
 
   val WindowSize: Int = 60
-  private val Pattern = "(\\d+)[\\t ]+([\\d.]+)".r
+  private val LinePattern = "[\\t ]*(\\d+)[\\t ]+([\\d.]+)[\\t ]*".r
 
-  case class Window(
-    endTime: Long = 0,
-    endMeasurement: Double = 0,
-    count: Int = 0,
-    minPrice: Double = Double.MaxValue,
-    maxPrice: Double = Double.MinValue,
-    sum: Double = 0
-  ) {
-    def update(time: Long, measurement: Double): Window = Window(
-      endTime = time,
-      endMeasurement = measurement,
-      count = count + 1,
-      minPrice = math.min(minPrice, measurement),
-      maxPrice = math.max(maxPrice, measurement),
-      sum = sum + measurement
-    )
+  case class Item(time: Long, measurement: Double)
+  object Item {
+    def validate(line: String): Try[Item] = line match {
+      case LinePattern(t, m) =>
+        for {
+          time <- Try {t.toLong}
+          measurement <- Try {m.toDouble}
+        } yield Item(time, measurement)
+      case _                 =>
+        Failure(new RuntimeException(s"Could not parse line: $line"))
+    }
+  }
 
-    def isValid: Boolean = endTime > 0 &&
-      endMeasurement > 0 &&
-      count > 0 &&
-      minPrice > 0 &&
-      minPrice < Double.MaxValue &&
-      maxPrice > 0 &&
-      sum > 0
+  case class Window(items: List[Item] = Nil) {
+    def sum: Double = items.map(_.measurement).sum
+    def min: Double = items.map(_.measurement).min
+    def max: Double = items.map(_.measurement).max
+    def count: Int = items.length
+    def endMeasurement: Double = items.head.measurement
+    def endTime: Long = items.head.time
 
-    override def toString: String = s"$endTime $endMeasurement $count $sum $minPrice $maxPrice"
-    def toFormattedString: String = toString //f"$endTime $endMeasurement% 8.5f $count% 3d $sum% 9.5f $minPrice% 8.5f $maxPrice% 8.5f"
+    def update(item: Item): Window = Window(item :: items.takeWhile(_.time > item.time - WindowSize))
+
+    override def toString: String = s"$endTime $endMeasurement $count $sum $min $max"
+    def toFormattedString: String = f"$endTime $endMeasurement%.5f $count%2d $sum%8.5f $min%.5f $max%.5f"
   }
   object Window {
-    def apply(time: Long, measurement: Double): Window = new Window(
-      endTime = time,
-      endMeasurement = measurement,
-      count = 1,
-      minPrice = measurement,
-      maxPrice = measurement,
-      sum = measurement
-    )
+    def apply(item: Item): Window = new Window(List(item))
   }
 
-  case class CurrentWindow(
-    window: Window = Window(),
-    endTime: Long = 0,
-    previousResult: Option[String] = None
-  ) {
-    def update(time: Long, measurement: Double, windowSize: Int): CurrentWindow =
-      if (time < endTime)
-        copy(window = window.update(time, measurement), previousResult = None)
-      else {
-        val nextEndTime = endTime + windowSize
-        CurrentWindow(
-          window = Window(time, measurement),
-          endTime = if (nextEndTime < time) time + windowSize else nextEndTime,
-          previousResult = if (window.isValid) Some(window.toFormattedString) else None
-        )
-      }
+  private def printCaption() = {
+    println("T          V        N  RS      MinV    MaxV")
+    1 to 50 foreach { _ => print("-") }
+    println()
+  }
 
-    def update(
-      timeString: String,
-      measurementString: String,
-      windowSize: Int = WindowSize
-    ): CurrentWindow = {
-      val result = for {
-        time <- Try {timeString.toLong}
-        measurement <- Try {measurementString.toDouble}
-      } yield update(time, measurement, windowSize)
-
-      result.recover { case e => copy(previousResult = None) }.get
-    }
+  private def trace(window: Window): Unit = {
+    println(window.toFormattedString)
   }
 
   def processFile(fileName: String): Unit = {
     val readFile = Try {Source.fromFile(fileName)} map { file: BufferedSource =>
-      iterate(file.getLines())
+      printCaption()
+
+      iterate(file.getLines())(trace)
+      /*  alternatively:
+      val it: RollingWindowIterator = RollingWindowIterator(file.getLines())
+      for (window <- it) window.foreach(trace)
+      */
       file.close()
     }
 
     readFile.recover { case e: Throwable => println(e) }
   }
 
-  def iterate(iterator: Iterator[String], windowSize: Int = WindowSize): CurrentWindow = {
-    var state = CurrentWindow()
-
-    println("T          V       N RS      MinV    MaxV")
-    1 to 50 foreach { _ => print("-") }
-    println()
-    for (line <- iterator) line match {
-      case Pattern(time, measurement) =>
-        state = state.update(time, measurement, windowSize)
-        state.previousResult.foreach { println(_) }
-      case _ =>
+  case class RollingWindowIterator(iterator: Iterator[String]) extends Iterator[Try[Window]] {
+    private var window = Window()
+    override def hasNext: Boolean = iterator.hasNext
+    override def next(): Try[Window] = Item.validate(iterator.next()).map { item =>
+      window = window.update(item)
+      window
     }
-    if (state.window.isValid) println(state.window.toFormattedString)
+  }
 
-    state
+  @tailrec
+  def iterate(iterator: Iterator[String], window: Window = Window())(f: (Window) => Unit): Unit = {
+    if (iterator.hasNext) {
+      val next = Item.validate(iterator.next()).map { item =>
+        val w = window.update(item)
+        f(w)
+        w
+      }.getOrElse(window)
+
+      iterate(iterator, next)(f)
+    }
   }
 
 }
