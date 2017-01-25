@@ -5,7 +5,7 @@ import scala.util.Try
 
 object TimeSeries {
 
-  val WindowSize: Int = 360
+  val WindowSize: Int = 60
   private val Pattern = "(\\d+)[\\t ]+([\\d.]+)".r
 
   case class Window(
@@ -34,7 +34,7 @@ object TimeSeries {
       sum > 0
 
     override def toString: String = s"$endTime $endMeasurement $count $sum $minPrice $maxPrice"
-    def toFormattedString: String = f"$endTime $endMeasurement% 8.5f $count% 3d $sum% 9.5f $minPrice% 8.5f $maxPrice% 8.5f"
+    def toFormattedString: String = toString //f"$endTime $endMeasurement% 8.5f $count% 3d $sum% 9.5f $minPrice% 8.5f $maxPrice% 8.5f"
   }
   object Window {
     def apply(time: Long, measurement: Double): Window = new Window(
