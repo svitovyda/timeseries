@@ -24,7 +24,7 @@ class TimeSeriesSpec extends FlatSpec with Matchers {
     Item.validate("7 4,5.7") shouldBe a[Failure[_]]
   }
 
-  it should "correctly update Window" in {
+  it should "correctly update Window (including big time gaps)" in {
     Window() shouldBe Window(Nil)
     val window1 = Window().update(Item(2, 3))
     window1 shouldBe Window(List(Item(2, 3)))
@@ -43,6 +43,15 @@ class TimeSeriesSpec extends FlatSpec with Matchers {
     window2.sum shouldBe 9
     window2.endMeasurement shouldBe 1
     window2.endTime shouldBe 4
+
+    val window3 = window2.update(Item(5000, 1))
+    window3 shouldBe Window(List(Item(5000, 1)))
+    window3.min shouldBe 1
+    window3.max shouldBe 1
+    window3.count shouldBe 1
+    window3.sum shouldBe 1
+    window3.endMeasurement shouldBe 1
+    window3.endTime shouldBe 5000
   }
 
   def getInputData = Iterator(
@@ -97,7 +106,7 @@ class TimeSeriesSpec extends FlatSpec with Matchers {
     "1355271588 1,80295  2  3,60570 1,80275 1,80295"
   )
 
-  it should "correctly tailrec iterate" in {
+  it should "correctly tailrec iterate (ignoring incorrect data)" in {
     val input = getInputData
     val result = getResult
     TimeSeries.iterate(input) { w =>
@@ -105,7 +114,7 @@ class TimeSeriesSpec extends FlatSpec with Matchers {
     }
   }
 
-  it should "correctly RollingWindowIterator iterate" in {
+  it should "correctly RollingWindowIterator iterate (ignoring incorrect data)" in {
     val input = getInputData
     val result = getResult
     val it = RollingWindowIterator(input)
