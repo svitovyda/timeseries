@@ -24,32 +24,65 @@ class TimeSeriesSpec extends FlatSpec with Matchers {
     Item.validate("7 4,5.7") shouldBe a[Failure[_]]
   }
 
+  it should "correctly add item into window" in {
+    Window() shouldBe Window(
+      sum = 0,
+      min = Double.MaxValue,
+      max = Double.MinValue,
+      count = 0,
+      items = Nil
+    )
+
+    val window1 = Window() + Item(5, 5)
+    window1 shouldBe Window(
+      sum = 5,
+      min = 5,
+      max = 5,
+      count = 1,
+      items = List(Item(5, 5))
+    )
+
+    val window2 = window1 + Item(6, 3)
+    window2 shouldBe Window(
+      sum = 8,
+      min = 3,
+      max = 5,
+      count = 2,
+      items = List(Item(6, 3), Item(5, 5))
+    )
+
+    window1 + Item(6, 8) shouldBe Window(
+      sum = 13,
+      min = 5,
+      max = 8,
+      count = 2,
+      items = List(Item(6, 8), Item(5, 5))
+    )
+
+    window2 + Item(7, 8) shouldBe Window(
+      sum = 16,
+      min = 3,
+      max = 8,
+      count = 3,
+      items = List(Item(7, 8), Item(6, 3), Item(5, 5))
+    )
+
+  }
+
   it should "correctly update Window (including big time gaps)" in {
-    Window() shouldBe Window(Nil)
+
     val window1 = Window().update(Item(2, 3))
-    window1 shouldBe Window(List(Item(2, 3)))
-    window1.min shouldBe 3
-    window1.max shouldBe 3
-    window1.count shouldBe 1
-    window1.sum shouldBe 3
+    window1 shouldBe Window(3, 3, 3, 1, List(Item(2, 3)))
     window1.endMeasurement shouldBe 3
     window1.endTime shouldBe 2
 
     val window2 = window1.update(Item(3, 5)).update(Item(4, 1))
-    window2 shouldBe Window(List(Item(4, 1), Item(3, 5), Item(2, 3)))
-    window2.min shouldBe 1
-    window2.max shouldBe 5
-    window2.count shouldBe 3
-    window2.sum shouldBe 9
+    window2 shouldBe Window(9, 1, 5, 3, List(Item(4, 1), Item(2, 3), Item(3, 5)))
     window2.endMeasurement shouldBe 1
     window2.endTime shouldBe 4
 
     val window3 = window2.update(Item(5000, 1))
-    window3 shouldBe Window(List(Item(5000, 1)))
-    window3.min shouldBe 1
-    window3.max shouldBe 1
-    window3.count shouldBe 1
-    window3.sum shouldBe 1
+    window3 shouldBe Window(1, 1, 1, 1, List(Item(5000, 1)))
     window3.endMeasurement shouldBe 1
     window3.endTime shouldBe 5000
   }

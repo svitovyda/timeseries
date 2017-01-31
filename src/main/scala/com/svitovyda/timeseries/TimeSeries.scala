@@ -22,21 +22,42 @@ object TimeSeries {
     }
   }
 
-  case class Window(items: List[Item] = Nil) {
-    def sum: Double = items.map(_.measurement).sum
-    def min: Double = items.map(_.measurement).min
-    def max: Double = items.map(_.measurement).max
-    def count: Int = items.length
-    def endMeasurement: Double = items.head.measurement
-    def endTime: Long = items.head.time
+  case class Window(
+    sum: Double = 0,
+    min: Double = Double.MaxValue,
+    max: Double = Double.MinValue,
+    count: Int = 0,
+    items: List[Item] = Nil
+  ) {
+    def endMeasurement: Double = items.headOption.map(_.measurement).getOrElse(0)
+    def endTime: Long = items.headOption.map(_.time).getOrElse(0)
 
-    def update(item: Item): Window = Window(item :: items.takeWhile(_.time > item.time - WindowSize))
+    def +(item: Item): Window = Window(
+      sum = sum + item.measurement,
+      min = math.min(min, item.measurement),
+      max = math.max(max, item.measurement),
+      count = count + 1,
+      items = item :: items
+    )
+    def update(item: Item): Window = {
+      val timeTill = item.time - WindowSize
+      items.foldLeft(Window()) {
+        case (w, i) if i.time > timeTill => w + i
+        case (w, _)                      => w
+      } + item
+    }
 
-    override def toString: String = s"$endTime $endMeasurement $count $sum $min $max"
+    def toSimpleString: String = s"$endTime $endMeasurement $count $sum $min $max"
     def toFormattedString: String = f"$endTime $endMeasurement%.5f $count%2d $sum%8.5f $min%.5f $max%.5f"
   }
   object Window {
-    def apply(item: Item): Window = new Window(List(item))
+    private def apply(item: Item): Window = new Window(
+      sum = item.measurement,
+      min = item.measurement,
+      max = item.measurement,
+      count = 1,
+      List(item)
+    )
   }
 
   private def printCaption() = {
@@ -61,7 +82,9 @@ object TimeSeries {
       file.close()
     }
 
-    readFile.recover { case e: Throwable => println(e) }
+    readFile.recover { case e: Throwable =>
+      println(e)
+    }
   }
 
   case class RollingWindowIterator(iterator: Iterator[String]) extends Iterator[Try[Window]] {
